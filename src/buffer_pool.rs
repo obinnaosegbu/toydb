@@ -52,6 +52,11 @@ impl BufferPoolManager {
         
         // Page is not currently in memory.
         let frame_id = self.find_free_frame()?;
+
+        if !self.evict_frame(frame_id){
+            return None;
+        }
+        
         let page = self.disk_manager.read(page_id).ok()?;
         let frame = &mut self.frames[frame_id.0 as usize];
 
@@ -65,11 +70,17 @@ impl BufferPoolManager {
         frame.page.as_ref()
     }
 
-    fn find_free_frame(&self) -> Option<FrameId>{
-        self.frames
+    fn find_free_frame(&mut self) -> Option<FrameId>{
+        let mut frame_id =self.frames
             .iter()
             .find(|frame| frame.page.is_none())
-            .map(|frame| frame.id)
+            .map(|frame| frame.id);
+        
+        if frame_id.is_none(){
+            frame_id = self.find_evictable_frame();
+        }
+
+        frame_id
     }
 
     pub fn unpin_page(&mut self, page_id: PageId, dirty: bool) -> bool {
@@ -86,6 +97,34 @@ impl BufferPoolManager {
         frame.pin_count -= 1;
 
         if dirty { frame.dirty = true };
+
+        true
+    }
+
+    fn find_evictable_frame(&mut self) -> Option<FrameId>{
+        println!("Test");
+        self.frames
+            .iter()
+            .find(|frame| frame.pin_count == 0)
+            .map(|frame| frame.id)
+    }
+
+    fn evict_frame(&mut self, frame_id: FrameId) -> bool {
+        let frame = &mut self.frames[frame_id.0 as usize];
+
+        if let Some(page) = &frame.page {
+            if frame.dirty {
+                let Ok(()) = self.disk_manager.write(page) else {
+                    return false;
+                };
+            }
+    
+            self.page_table.remove(&page.id());
+        }
+
+        frame.page = None;
+        frame.dirty = false;
+        frame.pin_count = 0;
 
         true
     }
