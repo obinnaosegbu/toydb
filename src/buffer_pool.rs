@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::page::{Page, PageId};
 use crate::disk_manager::DiskManager;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug)]
 pub struct FrameId(pub u64);
 
 struct Frame{
