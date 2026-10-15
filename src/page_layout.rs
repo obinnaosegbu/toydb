@@ -3,7 +3,7 @@ use crate::page::{PAGE_SIZE, Page};
 const HEADER_SIZE: usize = 16;
 const SLOT_SIZE: usize   = 8;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum PageLayoutError {
     RecordTooLarge,
     InsufficientSpace

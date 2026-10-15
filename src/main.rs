@@ -7,6 +7,7 @@ mod page;
 mod disk_manager;
 mod buffer_pool;
 mod page_layout;
+mod btree;
 
 fn main() -> std::io::Result<()> {
     let mut page = Page::new(PageId(0));
