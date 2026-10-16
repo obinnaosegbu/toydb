@@ -1,10 +1,8 @@
 use crate::{
     btree::{
-        node_header::NodeHeader, 
-        node_type::NodeType, 
-        record_id::RecordId
+        btree_node::BTreeNode, node_header::NodeHeader, node_type::NodeType, record_id::RecordId, serialization
     }, page::{
-        PAGE_SIZE, PageId
+        self, PAGE_SIZE, Page, PageId
     }
 };
 
@@ -153,6 +151,7 @@ pub fn deserialize_leaf(bytes: [u8; PAGE_SIZE]) -> Result<LeafNode, Serializatio
 pub fn serialize_internal(node: &InternalNode) -> Result<[u8; PAGE_SIZE], SerializationError> {
     let mut bytes = [0u8; PAGE_SIZE];
     let num_keys = node.num_keys();
+    
 
     if node.node_header.node_type != NodeType::Internal {
         return Err(SerializationError::InvalidNodeType);
@@ -162,7 +161,7 @@ pub fn serialize_internal(node: &InternalNode) -> Result<[u8; PAGE_SIZE], Serial
         return Err(SerializationError::TooManyKeys);
     }
 
-    if node.children.len() != num_keys
+    if node.children.len() != num_keys + 1
         || node.node_header.num_keys as usize != num_keys 
         || node.keys.windows(2).any(|pair| pair[0] >= pair[1])
     {
@@ -183,7 +182,7 @@ pub fn serialize_internal(node: &InternalNode) -> Result<[u8; PAGE_SIZE], Serial
         bytes[offset..offset+8].copy_from_slice(&child.0.to_le_bytes());
         offset += 8;
     }
-    
+
     Ok(bytes)
 }
 
@@ -235,4 +234,35 @@ pub fn deserialize_internal(bytes: [u8; PAGE_SIZE]) -> Result<InternalNode, Seri
     }
 
     Ok(InternalNode { node_header, keys, children })
+}
+
+pub fn node_to_page(page_id: PageId, node: &BTreeNode) -> Result<Page, SerializationError> {
+    let serialization = match node {
+        BTreeNode::Leaf(leaf) => serialize_leaf(leaf)?,
+        BTreeNode::Internal(internal) => serialize_internal(internal)?,
+    };
+
+    let mut page = Page::new(page_id);
+
+    page.data_mut().copy_from_slice(&serialization);
+    
+    Ok(page)
+}
+
+pub fn page_to_node(page: &Page) -> Result<BTreeNode, SerializationError> {
+    let bytes = page.data();
+    
+    match NodeType::from_bytes(bytes[0]) {
+        Some(NodeType::Leaf) => {
+            let node = deserialize_leaf(*bytes)?;
+            Ok(BTreeNode::Leaf(node))
+        }
+
+        Some(NodeType::Internal) => {
+            let node = deserialize_internal(*bytes)?;
+            Ok(BTreeNode::Internal(node))
+        }
+
+        None => Err(SerializationError::InvalidNodeType)
+    }
 }

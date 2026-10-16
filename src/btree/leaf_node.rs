@@ -3,8 +3,7 @@ use crate::{
         node_header::NodeHeader, 
         node_type::NodeType, 
         record_id::RecordId
-    }, 
-    page::PageId
+    }, page::{PAGE_SIZE, PageId}
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15,9 +14,14 @@ pub struct LeafNode {
     pub(super) next_leaf: Option<PageId>,
 }
 
+const LEAF_METADATA_SIZE: usize = 17;
+const LEAF_ENTRY_SIZE: usize = 20;
+const LEAF_CAPACITY: usize = (PAGE_SIZE - LEAF_METADATA_SIZE) / LEAF_ENTRY_SIZE;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LeafNodeError {
-    DuplicateKey(u64)
+    DuplicateKey(u64),
+    Full,
 }
 impl LeafNode {
     pub fn new() -> Self {
@@ -41,6 +45,14 @@ impl LeafNode {
 
     pub fn is_empty(&self) -> bool {
         self.keys.is_empty()
+    }
+
+    pub fn is_full(&self) -> bool {
+        self.keys.len()>= LEAF_CAPACITY
+    }
+
+    pub fn capacity(&self) -> usize {
+        LEAF_CAPACITY
     }
 
     pub fn keys(&self) -> &[u64] {

@@ -1,5 +1,5 @@
 pub mod btree;
-mod page;
-// mod disk_manager;
-// mod buffer_pool;
+pub mod page;
+pub mod disk_manager;
+pub mod buffer_pool;
 // mod page_layout;

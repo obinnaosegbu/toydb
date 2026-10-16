@@ -29,4 +29,22 @@ impl DiskManager {
         self.file.read_exact_at(&mut buffer, offset)?;
         Ok(Page::from_data(page_id, buffer))
     }
+
+    pub fn allocate_page(&self) -> std::io::Result<Page> {
+        let file_size = self.file.metadata()?.len();
+
+        if file_size % PAGE_SIZE as u64 != 0 {
+            return Err(
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData, "database file size is not page-alligned",
+                ));
+        }
+
+        let page_id = PageId(file_size / PAGE_SIZE as u64);
+        let page = Page::new(page_id);
+        
+        self.write(&page)?;
+
+        Ok(page)
+    }
 }

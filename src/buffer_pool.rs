@@ -39,6 +39,57 @@ impl BufferPoolManager {
         }
     }
 
+    pub fn new_page(&mut self) -> Option<PageId>{
+        let page = self.disk_manager.allocate_page().ok()?;
+        let page_id = page.id();
+
+        let frame_id = self.find_free_frame()?;
+
+        if !self.evict_frame(frame_id) {
+            return None;
+        }
+
+        let frame = &mut self.frames[frame_id.0 as usize];
+        frame.page = Some(page);
+        frame.dirty = false;
+        frame.pin_count = 1;
+
+        self.page_table.insert(page_id, frame_id);
+
+        Some(page_id)
+    }
+
+    pub fn fetch_page_mut(&mut self, page_id: PageId) -> Option<&mut Page>{
+        // Page is already loaded into the buffer pool.
+        if let Some(&frame_id) = self.page_table.get(&page_id) {
+            let frame = &mut self.frames[frame_id.0 as usize];
+            
+            frame.pin_count += 1;
+
+            println!("From pool");
+            return frame.page.as_mut();
+        } 
+        
+        // Page is not currently in memory.
+        let frame_id = self.find_free_frame()?;
+
+        if !self.evict_frame(frame_id){
+            return None;
+        }
+
+        let page = self.disk_manager.read(page_id).ok()?;
+        let frame = &mut self.frames[frame_id.0 as usize];
+
+        frame.page = Some(page);
+        frame.dirty = false;
+        frame.pin_count += 1;
+
+        self.page_table.insert(page_id, frame_id);
+        
+        println!("From disk");
+        frame.page.as_mut()
+    }
+
     pub fn fetch_page(&mut self, page_id: PageId) -> Option<&Page>{
         // Page is already loaded into the buffer pool.
         if let Some(&frame_id) = self.page_table.get(&page_id) {
