@@ -66,7 +66,6 @@ impl BufferPoolManager {
             
             frame.pin_count += 1;
 
-            println!("From pool");
             return frame.page.as_mut();
         } 
         
@@ -86,7 +85,6 @@ impl BufferPoolManager {
 
         self.page_table.insert(page_id, frame_id);
         
-        println!("From disk");
         frame.page.as_mut()
     }
 
@@ -97,7 +95,6 @@ impl BufferPoolManager {
             
             frame.pin_count += 1;
 
-            println!("From pool");
             return frame.page.as_ref();
         } 
         
@@ -117,7 +114,6 @@ impl BufferPoolManager {
 
         self.page_table.insert(page_id, frame_id);
         
-        println!("From disk");
         frame.page.as_ref()
     }
 
@@ -153,7 +149,6 @@ impl BufferPoolManager {
     }
 
     fn find_evictable_frame(&self) -> Option<FrameId>{
-        println!("Test");
         self.frames
             .iter()
             .find(|frame| frame.pin_count == 0)

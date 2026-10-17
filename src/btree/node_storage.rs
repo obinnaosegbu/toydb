@@ -1,6 +1,6 @@
 use crate::{
     btree::{
-        btree_node::BTreeNode, leaf_node::LeafNodeError, serialization::{
+        btree_node::BTreeNode, internal_node::InternalNodeError, leaf_node::LeafNodeError, serialization::{
             SerializationError, 
             node_to_page, 
             page_to_node
@@ -13,7 +13,9 @@ pub enum NodeStorageError {
     BufferPoolError,
     Serialization(SerializationError),
     MissingChildPointer,
-    LeafNodeError(LeafNodeError)
+    LeafNodeError(LeafNodeError),
+    InternalNodeError(InternalNodeError),
+    UnsupportedOperation,
 }
 
 pub struct NodeStorage {

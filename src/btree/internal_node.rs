@@ -1,4 +1,4 @@
-use crate::{btree::{node_header::NodeHeader, node_type::NodeType}, page::PageId};
+use crate::{btree::{node_header::NodeHeader, node_type::NodeType}, page::{PAGE_SIZE, PageId}};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InternalNode {
@@ -12,6 +12,7 @@ pub enum InternalNodeError {
     DuplicateKey(u64),
     FirstChildAlreadySet,
     MissingFirstChild,
+    Full,
 }
 
 impl InternalNode {
@@ -41,6 +42,14 @@ impl InternalNode {
         &self.children
     }
 
+    pub fn capacity(&self) -> usize {
+        (PAGE_SIZE - 16) / 16
+    }
+
+    pub fn is_full(&self) -> bool {
+        self.num_keys() >= self.capacity()
+    }
+
     pub fn set_first_child(&mut self, page_id: PageId) -> Result<(), InternalNodeError> {
         if !self.children.is_empty() {
             return Err(InternalNodeError::FirstChildAlreadySet);
@@ -51,6 +60,10 @@ impl InternalNode {
     }
 
     pub fn insert_separator(&mut self, key: u64, right_child: PageId) -> Result<(), InternalNodeError>{
+        if self.is_full(){
+            return Err(InternalNodeError::Full); 
+        }
+
         if self.children.is_empty(){
             return Err(InternalNodeError::MissingFirstChild);
         }

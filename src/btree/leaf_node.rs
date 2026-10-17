@@ -22,6 +22,7 @@ const LEAF_CAPACITY: usize = (PAGE_SIZE - LEAF_METADATA_SIZE) / LEAF_ENTRY_SIZE;
 pub enum LeafNodeError {
     DuplicateKey(u64),
     Full,
+    NotFull,
 }
 impl LeafNode {
     pub fn new() -> Self {
@@ -92,6 +93,11 @@ impl LeafNode {
     }
 
     pub fn insert(&mut self, key: u64, record_id: RecordId) -> Result<(), LeafNodeError>{
+
+        if self.is_full() {
+            return Err(LeafNodeError::Full);
+        }
+
         let mut left = 0;
         let mut right = self.keys.len();
 
@@ -114,6 +120,27 @@ impl LeafNode {
         self.node_header.set_num_keys(self.keys.len());
 
         Ok(())
+    }
+
+    pub fn split(&mut self) -> Result<LeafNode, LeafNodeError>{
+        if !self.is_full(){
+            return Err(LeafNodeError::NotFull);
+        }
+
+        let midpoint = self.num_keys() / 2;
+
+        let mut right = LeafNode::new();
+
+        right.keys = self.keys.split_off(midpoint);
+        right.record_ids = self.record_ids.split_off(midpoint);
+
+        right.next_leaf = self.next_leaf;
+        self.next_leaf = None;
+
+        self.node_header.set_num_keys(self.keys.len());
+        right.node_header.set_num_keys(right.keys.len());
+
+        Ok(right)
     }
 
     pub fn remove(&mut self, key: u64) -> bool {
