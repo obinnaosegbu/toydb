@@ -9,7 +9,6 @@ pub struct NodeHeader {
     pub reserved: [u8; 5],
 }
 
-
 impl NodeHeader {
     fn new(node_type: NodeType) -> Self {
         Self {
@@ -32,8 +31,7 @@ impl NodeHeader {
     pub fn deserialize(bytes: [u8; NODE_HEADER_SIZE]) -> Option<Self> {
         let node_type = NodeType::from_bytes(bytes[0])?;
 
-        let num_keys =
-            u16::from_le_bytes(bytes[1..3].try_into().ok()?);
+        let num_keys = u16::from_le_bytes(bytes[1..3].try_into().ok()?);
 
         let mut reserved = [0u8; 5];
         reserved.copy_from_slice(&bytes[3..8]);
@@ -45,7 +43,7 @@ impl NodeHeader {
         })
     }
 
-    pub fn set_num_keys(&mut self, count: usize){
+    pub fn set_num_keys(&mut self, count: usize) {
         self.num_keys = count as u16
     }
 }

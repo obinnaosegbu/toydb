@@ -1,16 +1,12 @@
 use crate::{
     btree::{
-        btree_node::BTreeNode, node_header::NodeHeader, node_type::NodeType, record_id::RecordId, serialization
-    }, page::{
-        self, PAGE_SIZE, Page, PageId
-    }
+        btree_node::BTreeNode, node_header::NodeHeader, node_type::NodeType, record_id::RecordId,
+        serialization,
+    },
+    page::{self, PAGE_SIZE, Page, PageId},
 };
 
-use super::{
-    leaf_node::LeafNode,
-    internal_node::InternalNode,
-    node_header::NODE_HEADER_SIZE,
-};
+use super::{internal_node::InternalNode, leaf_node::LeafNode, node_header::NODE_HEADER_SIZE};
 
 const LEAF_METADATA_SIZE: usize = 17;
 const LEAF_ENTRY_SIZE: usize = 20;
@@ -40,8 +36,8 @@ pub fn serialize_leaf(node: &LeafNode) -> Result<[u8; PAGE_SIZE], SerializationE
         return Err(SerializationError::TooManyKeys);
     }
 
-    if num_keys != node.record_ids.len() 
-        || node.node_header.num_keys as usize != num_keys 
+    if num_keys != node.record_ids.len()
+        || node.node_header.num_keys as usize != num_keys
         || node.keys.windows(2).any(|pair| pair[0] >= pair[1])
     {
         return Err(SerializationError::InvalidData);
@@ -54,7 +50,7 @@ pub fn serialize_leaf(node: &LeafNode) -> Result<[u8; PAGE_SIZE], SerializationE
         Some(page_id) => {
             bytes[NODE_HEADER_SIZE] = 1;
             bytes[NODE_HEADER_SIZE + 1..LEAF_METADATA_SIZE]
-            .copy_from_slice(&page_id.0.to_le_bytes());
+                .copy_from_slice(&page_id.0.to_le_bytes());
         }
         None => {
             bytes[NODE_HEADER_SIZE] = 0;
@@ -63,17 +59,17 @@ pub fn serialize_leaf(node: &LeafNode) -> Result<[u8; PAGE_SIZE], SerializationE
 
     let mut offset = LEAF_METADATA_SIZE;
 
-    for (key, record_id) in node.keys.iter().zip(&node.record_ids){
-        bytes[offset..offset+8].copy_from_slice(&key.to_le_bytes());
+    for (key, record_id) in node.keys.iter().zip(&node.record_ids) {
+        bytes[offset..offset + 8].copy_from_slice(&key.to_le_bytes());
         offset += 8;
 
-        bytes[offset..offset+8].copy_from_slice(&record_id.page_id().0.to_le_bytes());
+        bytes[offset..offset + 8].copy_from_slice(&record_id.page_id().0.to_le_bytes());
         offset += 8;
 
-        bytes[offset..offset+4].copy_from_slice(&record_id.slot_id().to_le_bytes());
+        bytes[offset..offset + 4].copy_from_slice(&record_id.slot_id().to_le_bytes());
         offset += 4;
     }
-    
+
     Ok(bytes)
 }
 
@@ -82,8 +78,8 @@ pub fn deserialize_leaf(bytes: [u8; PAGE_SIZE]) -> Result<LeafNode, Serializatio
         .try_into()
         .map_err(|_| SerializationError::InvalidData)?;
 
-    let node_header = NodeHeader::deserialize(header_bytes)
-        .ok_or(SerializationError::InvalidNodeType)?;
+    let node_header =
+        NodeHeader::deserialize(header_bytes).ok_or(SerializationError::InvalidNodeType)?;
 
     if node_header.node_type != NodeType::Leaf {
         return Err(SerializationError::InvalidNodeType);
@@ -103,14 +99,16 @@ pub fn deserialize_leaf(bytes: [u8; PAGE_SIZE]) -> Result<LeafNode, Serializatio
 
     let next_leaf = match flag {
         1 => {
-            let page_id = u64::from_le_bytes(bytes[NODE_HEADER_SIZE + 1..LEAF_METADATA_SIZE]
-                .try_into()
-                .map_err(|_| SerializationError::InvalidData)?);
+            let page_id = u64::from_le_bytes(
+                bytes[NODE_HEADER_SIZE + 1..LEAF_METADATA_SIZE]
+                    .try_into()
+                    .map_err(|_| SerializationError::InvalidData)?,
+            );
 
             Some(PageId(page_id))
         }
         0 => None,
-        _ => return Err(SerializationError::InvalidNextLeafFlag)
+        _ => return Err(SerializationError::InvalidNextLeafFlag),
     };
 
     let mut keys: Vec<u64> = Vec::with_capacity(num_keys);
@@ -118,26 +116,29 @@ pub fn deserialize_leaf(bytes: [u8; PAGE_SIZE]) -> Result<LeafNode, Serializatio
 
     let mut offset = LEAF_METADATA_SIZE;
 
-    for _ in 0..num_keys{
-        let key = u64::from_le_bytes(bytes[offset..offset+8]
-            .try_into()
-            .map_err(|_| SerializationError::InvalidData)?
+    for _ in 0..num_keys {
+        let key = u64::from_le_bytes(
+            bytes[offset..offset + 8]
+                .try_into()
+                .map_err(|_| SerializationError::InvalidData)?,
         );
         offset += 8;
 
-        let page_id = u64::from_le_bytes(bytes[offset..offset+8]
-            .try_into()
-            .map_err(|_| SerializationError::InvalidData)?
+        let page_id = u64::from_le_bytes(
+            bytes[offset..offset + 8]
+                .try_into()
+                .map_err(|_| SerializationError::InvalidData)?,
         );
         offset += 8;
 
-        let slot_id = u32::from_le_bytes(bytes[offset..offset+4]
-            .try_into()
-            .map_err(|_| SerializationError::InvalidData)?
+        let slot_id = u32::from_le_bytes(
+            bytes[offset..offset + 4]
+                .try_into()
+                .map_err(|_| SerializationError::InvalidData)?,
         );
         offset += 4;
 
-        if keys.last().is_some_and(|&previous| previous >= key){
+        if keys.last().is_some_and(|&previous| previous >= key) {
             return Err(SerializationError::InvalidData);
         }
 
@@ -145,13 +146,17 @@ pub fn deserialize_leaf(bytes: [u8; PAGE_SIZE]) -> Result<LeafNode, Serializatio
         record_ids.push(RecordId::new(PageId(page_id), slot_id));
     }
 
-    Ok(LeafNode { node_header, keys, record_ids, next_leaf })
+    Ok(LeafNode {
+        node_header,
+        keys,
+        record_ids,
+        next_leaf,
+    })
 }
 
 pub fn serialize_internal(node: &InternalNode) -> Result<[u8; PAGE_SIZE], SerializationError> {
     let mut bytes = [0u8; PAGE_SIZE];
     let num_keys = node.num_keys();
-    
 
     if node.node_header.node_type != NodeType::Internal {
         return Err(SerializationError::InvalidNodeType);
@@ -162,7 +167,7 @@ pub fn serialize_internal(node: &InternalNode) -> Result<[u8; PAGE_SIZE], Serial
     }
 
     if node.children.len() != num_keys + 1
-        || node.node_header.num_keys as usize != num_keys 
+        || node.node_header.num_keys as usize != num_keys
         || node.keys.windows(2).any(|pair| pair[0] >= pair[1])
     {
         return Err(SerializationError::InvalidData);
@@ -174,12 +179,12 @@ pub fn serialize_internal(node: &InternalNode) -> Result<[u8; PAGE_SIZE], Serial
     let mut offset = INTERNAL_METADATA_SIZE;
 
     for key in &node.keys {
-        bytes[offset..offset+8].copy_from_slice(&key.to_le_bytes());
+        bytes[offset..offset + 8].copy_from_slice(&key.to_le_bytes());
         offset += 8;
     }
 
     for child in &node.children {
-        bytes[offset..offset+8].copy_from_slice(&child.0.to_le_bytes());
+        bytes[offset..offset + 8].copy_from_slice(&child.0.to_le_bytes());
         offset += 8;
     }
 
@@ -191,8 +196,8 @@ pub fn deserialize_internal(bytes: [u8; PAGE_SIZE]) -> Result<InternalNode, Seri
         .try_into()
         .map_err(|_| SerializationError::InvalidData)?;
 
-    let node_header = NodeHeader::deserialize(header_bytes)
-        .ok_or(SerializationError::InvalidNodeType)?;
+    let node_header =
+        NodeHeader::deserialize(header_bytes).ok_or(SerializationError::InvalidNodeType)?;
 
     if node_header.node_type != NodeType::Internal {
         return Err(SerializationError::InvalidNodeType);
@@ -210,13 +215,14 @@ pub fn deserialize_internal(bytes: [u8; PAGE_SIZE]) -> Result<InternalNode, Seri
     let mut offset = INTERNAL_METADATA_SIZE;
 
     for _ in 0..num_keys {
-        let key = u64::from_le_bytes(bytes[offset..offset+8]
-            .try_into()
-            .map_err(|_| SerializationError::InvalidData)?
+        let key = u64::from_le_bytes(
+            bytes[offset..offset + 8]
+                .try_into()
+                .map_err(|_| SerializationError::InvalidData)?,
         );
         offset += 8;
 
-        if keys.last().is_some_and(|&previous| previous >= key){
+        if keys.last().is_some_and(|&previous| previous >= key) {
             return Err(SerializationError::InvalidData);
         }
 
@@ -224,16 +230,21 @@ pub fn deserialize_internal(bytes: [u8; PAGE_SIZE]) -> Result<InternalNode, Seri
     }
 
     for _ in 0..num_keys + 1 {
-        let page_id = u64::from_le_bytes(bytes[offset..offset+8]
-            .try_into()
-            .map_err(|_| SerializationError::InvalidData)?
+        let page_id = u64::from_le_bytes(
+            bytes[offset..offset + 8]
+                .try_into()
+                .map_err(|_| SerializationError::InvalidData)?,
         );
         offset += 8;
 
         children.push(PageId(page_id));
     }
 
-    Ok(InternalNode { node_header, keys, children })
+    Ok(InternalNode {
+        node_header,
+        keys,
+        children,
+    })
 }
 
 pub fn node_to_page(page_id: PageId, node: &BTreeNode) -> Result<Page, SerializationError> {
@@ -245,13 +256,13 @@ pub fn node_to_page(page_id: PageId, node: &BTreeNode) -> Result<Page, Serializa
     let mut page = Page::new(page_id);
 
     page.data_mut().copy_from_slice(&serialization);
-    
+
     Ok(page)
 }
 
 pub fn page_to_node(page: &Page) -> Result<BTreeNode, SerializationError> {
     let bytes = page.data();
-    
+
     match NodeType::from_bytes(bytes[0]) {
         Some(NodeType::Leaf) => {
             let node = deserialize_leaf(*bytes)?;
@@ -263,6 +274,6 @@ pub fn page_to_node(page: &Page) -> Result<BTreeNode, SerializationError> {
             Ok(BTreeNode::Internal(node))
         }
 
-        None => Err(SerializationError::InvalidNodeType)
+        None => Err(SerializationError::InvalidNodeType),
     }
 }

@@ -3,7 +3,7 @@ use crate::btree::{internal_node::InternalNode, leaf_node::LeafNode, node_type::
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BTreeNode {
     Internal(InternalNode),
-    Leaf(LeafNode)
+    Leaf(LeafNode),
 }
 
 impl BTreeNode {

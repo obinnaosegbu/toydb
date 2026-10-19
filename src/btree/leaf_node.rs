@@ -1,9 +1,6 @@
 use crate::{
-    btree::{
-        node_header::NodeHeader, 
-        node_type::NodeType, 
-        record_id::RecordId
-    }, page::{PAGE_SIZE, PageId}
+    btree::{node_header::NodeHeader, node_type::NodeType, record_id::RecordId},
+    page::{PAGE_SIZE, PageId},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,7 +33,7 @@ impl LeafNode {
             node_header,
             keys: Vec::new(),
             record_ids: Vec::new(),
-            next_leaf: None
+            next_leaf: None,
         }
     }
 
@@ -49,7 +46,7 @@ impl LeafNode {
     }
 
     pub fn is_full(&self) -> bool {
-        self.keys.len()>= LEAF_CAPACITY
+        self.keys.len() >= LEAF_CAPACITY
     }
 
     pub fn capacity(&self) -> usize {
@@ -86,14 +83,13 @@ impl LeafNode {
 
         return None;
     }
-    
+
     pub fn get_record_id(&self, key: u64) -> Option<RecordId> {
         let pos = self.find_key(key)?;
         Some(self.record_ids[pos])
     }
 
-    pub fn insert(&mut self, key: u64, record_id: RecordId) -> Result<(), LeafNodeError>{
-
+    pub fn insert(&mut self, key: u64, record_id: RecordId) -> Result<(), LeafNodeError> {
         if self.is_full() {
             return Err(LeafNodeError::Full);
         }
@@ -110,7 +106,7 @@ impl LeafNode {
                 right = mid;
             }
         }
-        
+
         if left < self.keys.len() && self.keys[left] == key {
             return Err(LeafNodeError::DuplicateKey(key));
         }
@@ -122,8 +118,8 @@ impl LeafNode {
         Ok(())
     }
 
-    pub fn split(&mut self) -> Result<LeafNode, LeafNodeError>{
-        if !self.is_full(){
+    pub fn split(&mut self) -> Result<LeafNode, LeafNodeError> {
+        if !self.is_full() {
             return Err(LeafNodeError::NotFull);
         }
 
@@ -152,7 +148,7 @@ impl LeafNode {
                 return true;
             }
 
-            None => return false
+            None => return false,
         }
     }
 }

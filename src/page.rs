@@ -5,12 +5,15 @@ pub struct PageId(pub u64);
 
 pub struct Page {
     id: PageId,
-    data: [u8; PAGE_SIZE]
+    data: [u8; PAGE_SIZE],
 }
 
 impl Page {
     pub fn new(id: PageId) -> Self {
-        Self{id, data: [0u8; PAGE_SIZE]}
+        Self {
+            id,
+            data: [0u8; PAGE_SIZE],
+        }
     }
 
     pub fn from_data(id: PageId, data: [u8; PAGE_SIZE]) -> Self {
@@ -25,7 +28,7 @@ impl Page {
         &self.data
     }
 
-    pub fn data_mut(&mut self) -> &mut[u8; PAGE_SIZE] {
+    pub fn data_mut(&mut self) -> &mut [u8; PAGE_SIZE] {
         &mut self.data
     }
 }

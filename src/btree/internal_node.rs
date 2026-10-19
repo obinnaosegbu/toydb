@@ -1,10 +1,13 @@
-use crate::{btree::{node_header::NodeHeader, node_type::NodeType}, page::{PAGE_SIZE, PageId}};
+use crate::{
+    btree::{node_header::NodeHeader, node_type::NodeType},
+    page::{PAGE_SIZE, PageId},
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InternalNode {
     pub(super) node_header: NodeHeader,
     pub(super) keys: Vec<u64>,
-    pub(super) children: Vec<PageId>
+    pub(super) children: Vec<PageId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -13,6 +16,7 @@ pub enum InternalNodeError {
     FirstChildAlreadySet,
     MissingFirstChild,
     Full,
+    NotFull,
 }
 
 impl InternalNode {
@@ -59,12 +63,16 @@ impl InternalNode {
         Ok(())
     }
 
-    pub fn insert_separator(&mut self, key: u64, right_child: PageId) -> Result<(), InternalNodeError>{
-        if self.is_full(){
-            return Err(InternalNodeError::Full); 
+    pub fn insert_separator(
+        &mut self,
+        key: u64,
+        right_child: PageId,
+    ) -> Result<(), InternalNodeError> {
+        if self.is_full() {
+            return Err(InternalNodeError::Full);
         }
 
-        if self.children.is_empty(){
+        if self.children.is_empty() {
             return Err(InternalNodeError::MissingFirstChild);
         }
 
@@ -80,7 +88,7 @@ impl InternalNode {
                 right = mid;
             }
         }
-        
+
         if left < self.keys.len() && self.keys[left] == key {
             return Err(InternalNodeError::DuplicateKey(key));
         }
@@ -115,4 +123,49 @@ impl InternalNode {
         self.children.get(left).copied()
     }
 
+    pub fn insert_seperator_and_split(
+        &mut self,
+        seperator: u64,
+        right_child: PageId,
+    ) -> Result<(u64, InternalNode), InternalNodeError> {
+        if !self.is_full() {
+            return Err(InternalNodeError::NotFull);
+        }
+
+        if self.children.is_empty() {
+            return Err(InternalNodeError::MissingFirstChild);
+        }
+
+        let mut keys = self.keys.clone();
+        let mut children = self.children.clone();
+
+        let index = keys.partition_point(|&key| key < seperator);
+
+        if index < keys.len() && keys[index] == seperator {
+            return Err(InternalNodeError::DuplicateKey(seperator));
+        }
+
+        keys.insert(index, seperator);
+        children.insert(index + 1, right_child);
+
+        let midpoint = keys.len() / 2;
+        let promoted_key = keys.remove(midpoint);
+
+        let right_keys = keys.split_off(midpoint);
+        let right_children = children.split_off(midpoint + 1);
+
+        self.keys = keys;
+        self.children = children;
+
+        self.node_header.set_num_keys(self.keys.len());
+
+        let mut right = InternalNode::new();
+
+        right.keys = right_keys;
+        right.children = right_children;
+
+        right.node_header.set_num_keys(right.keys.len());
+
+        Ok((promoted_key, right))
+    }
 }

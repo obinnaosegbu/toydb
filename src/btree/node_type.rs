@@ -14,7 +14,7 @@ impl NodeType {
 
     pub fn from_bytes(value: u8) -> Option<Self> {
         if value == 0 {
-            return  Some(NodeType::Internal);
+            return Some(NodeType::Internal);
         } else if value == 1 {
             return Some(NodeType::Leaf);
         } else {
