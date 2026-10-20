@@ -66,22 +66,7 @@ impl LeafNode {
     }
 
     pub fn find_key(&self, key: u64) -> Option<usize> {
-        let mut left = 0;
-        let mut right = self.keys.len();
-
-        while left < right {
-            let mid = left + (right - left) / 2;
-
-            if self.keys[mid] == key {
-                return Some(mid);
-            } else if self.keys[mid] < key {
-                left = mid + 1;
-            } else {
-                right = mid;
-            }
-        }
-
-        return None;
+        self.keys.binary_search(&key).ok()
     }
 
     pub fn get_record_id(&self, key: u64) -> Option<RecordId> {
@@ -94,28 +79,18 @@ impl LeafNode {
             return Err(LeafNodeError::Full);
         }
 
-        let mut left = 0;
-        let mut right = self.keys.len();
+        match self.keys.binary_search(&key) {
+            Ok(_) => {
+                return Err(LeafNodeError::DuplicateKey(key));
+            }
+            Err(index) => {
+                self.keys.insert(index, key);
+                self.record_ids.insert(index, record_id);
+                self.node_header.set_num_keys(self.keys.len());
 
-        while left < right {
-            let mid = left + (right - left) / 2;
-
-            if self.keys[mid] < key {
-                left = mid + 1;
-            } else {
-                right = mid;
+                Ok(())
             }
         }
-
-        if left < self.keys.len() && self.keys[left] == key {
-            return Err(LeafNodeError::DuplicateKey(key));
-        }
-
-        self.keys.insert(left, key);
-        self.record_ids.insert(left, record_id);
-        self.node_header.set_num_keys(self.keys.len());
-
-        Ok(())
     }
 
     pub fn split(&mut self) -> Result<LeafNode, LeafNodeError> {

@@ -92,26 +92,13 @@ impl InternalNode {
     }
 
     pub fn child_for_key(&self, key: u64) -> Option<PageId> {
-        let num_keys = self.keys.len();
-
         if self.children.is_empty() {
             return None;
         }
 
-        let mut left = 0;
-        let mut right = num_keys;
+        let index = self.keys.partition_point(|&k| k <= key);
 
-        while left < right {
-            let mid = left + (right - left) / 2;
-
-            if self.keys[mid] > key {
-                right = mid;
-            } else {
-                left = mid + 1
-            }
-        }
-
-        self.children.get(left).copied()
+        self.children.get(index).copied()
     }
 
     pub fn insert_separator_and_split(
