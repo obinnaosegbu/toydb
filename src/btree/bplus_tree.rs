@@ -94,7 +94,7 @@ impl BPlusTree {
             }
 
             let (promoted_key, right_internal) = parent_node
-                .insert_seperator_and_split(seperator, right_page_id)
+                .insert_separator_and_split(seperator, right_page_id)
                 .map_err(NodeStorageError::InternalNodeError)?;
 
             self.storage

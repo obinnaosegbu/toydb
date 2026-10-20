@@ -65,7 +65,7 @@ impl InternalNode {
 
     pub fn insert_separator(
         &mut self,
-        key: u64,
+        seperator: u64,
         right_child: PageId,
     ) -> Result<(), InternalNodeError> {
         if self.is_full() {
@@ -76,25 +76,16 @@ impl InternalNode {
             return Err(InternalNodeError::MissingFirstChild);
         }
 
-        let mut left = 0;
-        let mut right = self.keys.len();
+        let index = self.keys.partition_point(|&key| key < seperator);
 
-        while left < right {
-            let mid = left + (right - left) / 2;
-
-            if self.keys[mid] < key {
-                left = mid + 1;
-            } else {
-                right = mid;
-            }
+        if index < self.keys.len() && self.keys[index] == seperator {
+            return Err(InternalNodeError::DuplicateKey(seperator));
         }
 
-        if left < self.keys.len() && self.keys[left] == key {
-            return Err(InternalNodeError::DuplicateKey(key));
-        }
+        self.keys.insert(index, seperator);
+        self.children.insert(index + 1, right_child);
 
-        self.keys.insert(left, key);
-        self.children.insert(left + 1, right_child);
+
         self.node_header.set_num_keys(self.keys.len());
 
         Ok(())
@@ -123,7 +114,7 @@ impl InternalNode {
         self.children.get(left).copied()
     }
 
-    pub fn insert_seperator_and_split(
+    pub fn insert_separator_and_split(
         &mut self,
         seperator: u64,
         right_child: PageId,
