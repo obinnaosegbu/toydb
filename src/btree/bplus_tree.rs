@@ -148,7 +148,6 @@ impl BPlusTree {
                     }
 
                     let mut right = leaf.split().map_err(NodeStorageError::LeafNodeError)?;
-
                     let mut seperator = right.keys()[0];
 
                     if key < seperator {
@@ -160,16 +159,15 @@ impl BPlusTree {
                             .map_err(NodeStorageError::LeafNodeError)?;
                     }
 
+                    right.set_next_leaf(leaf.next_leaf());
+
                     let mut right_page_id = self
                         .storage
                         .allocate_node(&BTreeNode::Leaf(right.clone()))?;
 
                     leaf.set_next_leaf(Some(right_page_id));
-
                     self.storage.write_node(page_id, &BTreeNode::Leaf(leaf))?;
-                    self.storage
-                        .write_node(right_page_id, &BTreeNode::Leaf(right))?;
-
+                    
                     self.insert_into_parent(ancestors, page_id, seperator, right_page_id)?;
 
                     return Ok(());

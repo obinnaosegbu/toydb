@@ -99,14 +99,10 @@ impl LeafNode {
         }
 
         let midpoint = self.num_keys() / 2;
-
         let mut right = LeafNode::new();
 
         right.keys = self.keys.split_off(midpoint);
         right.record_ids = self.record_ids.split_off(midpoint);
-
-        right.next_leaf = self.next_leaf;
-        self.next_leaf = None;
 
         self.node_header.set_num_keys(self.keys.len());
         right.node_header.set_num_keys(right.keys.len());
