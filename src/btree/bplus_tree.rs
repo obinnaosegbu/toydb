@@ -24,6 +24,8 @@ pub enum BPlusTreeValidationError {
     InvalidKeyRange,
     LeafLinkMismatch,
     UnequalLeafDepth,
+    InvalidInternalNode,
+    EmptyNonRootLeaf,
 }
 
 impl BPlusTree {
@@ -137,6 +139,10 @@ impl BPlusTree {
             BTreeNode::Leaf(leaf) => {
                 let keys = leaf.keys();
 
+                if keys.is_empty() && page_id != self.root_page_id {
+                    return Err(BPlusTreeValidationError::EmptyNonRootLeaf);
+                }
+
                 if keys.windows(2).any(|pair| pair[0] >= pair[1]) {
                     return Err(BPlusTreeValidationError::UnsortedKeys);
                 }
@@ -150,6 +156,10 @@ impl BPlusTree {
             BTreeNode::Internal(internal) => {
                 let keys = internal.keys();
                 let children = internal.children();
+
+                if keys.is_empty() {
+                    return Err(BPlusTreeValidationError::InvalidInternalNode);
+                }
 
                 // 4. Internal keys must be strictly increasing.
                 if keys.windows(2).any(|pair| pair[0] >= pair[1]) {
