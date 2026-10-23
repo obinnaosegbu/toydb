@@ -1,4 +1,4 @@
-use std::path;
+use std::{collections::HashSet, iter::zip, path, range};
 
 use crate::{
     btree::{
@@ -8,12 +8,22 @@ use crate::{
         node_storage::{NodeStorage, NodeStorageError},
         record_id::RecordId,
     },
-    page::PageId,
+    page::{Page, PageId},
 };
 
 pub struct BPlusTree {
     root_page_id: PageId,
     storage: NodeStorage,
+}
+
+pub enum BPlusTreeValidationError {
+    Storage(NodeStorageError),
+    UnsortedKeys,
+    InvalidChildCount,
+    RepeatedPage(PageId),
+    InvalidKeyRange,
+    LeafLinkMismatch,
+    UnequalLeafDepth,
 }
 
 impl BPlusTree {
@@ -49,6 +59,135 @@ impl BPlusTree {
                         .child_for_key(key)
                         .ok_or(NodeStorageError::MissingChildPointer)?;
                 }
+            }
+        }
+    }
+
+    pub fn validate(&mut self) -> Result<(), BPlusTreeValidationError> {
+        let mut visited = HashSet::new();
+        let mut leaf_order = Vec::new();
+        let mut leaf_depths = Vec::new();
+
+        self.validate_subtree(
+            self.root_page_id,
+            &mut visited,
+            &mut leaf_order,
+            &mut leaf_depths,
+            0,
+        )?;
+        self.validate_link_links(&leaf_order)?;
+
+        if let Some(&firt_depth) = leaf_depths.first() {
+            if leaf_depths.iter().any(|&depth| depth != firt_depth) {
+                return Err(BPlusTreeValidationError::UnequalLeafDepth);
+            }
+        } else {
+            return Err(BPlusTreeValidationError::UnequalLeafDepth);
+        }
+
+        Ok(())
+    }
+
+    pub fn validate_link_links(
+        &mut self,
+        leaf_order: &[PageId],
+    ) -> Result<(), BPlusTreeValidationError> {
+        for (index, &page_id) in leaf_order.iter().enumerate() {
+            let expected_next_leaf = leaf_order.get(index + 1).copied();
+
+            let node = self
+                .storage
+                .read_node(page_id)
+                .map_err(BPlusTreeValidationError::Storage)?;
+
+            match node {
+                BTreeNode::Internal(_) => {
+                    return Err(BPlusTreeValidationError::LeafLinkMismatch);
+                }
+                BTreeNode::Leaf(leaf_node) => {
+                    if leaf_node.next_leaf() != expected_next_leaf {
+                        return Err(BPlusTreeValidationError::LeafLinkMismatch);
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn validate_subtree(
+        &mut self,
+        page_id: PageId,
+        visited: &mut HashSet<PageId>,
+        leaf_order: &mut Vec<PageId>,
+        leaf_depths: &mut Vec<usize>,
+        depth: usize,
+    ) -> Result<Option<(u64, u64)>, BPlusTreeValidationError> {
+        if !visited.insert(page_id) {
+            return Err(BPlusTreeValidationError::RepeatedPage(page_id));
+        }
+
+        // 2. Read the current node.
+        let node = self
+            .storage
+            .read_node(page_id)
+            .map_err(BPlusTreeValidationError::Storage)?;
+
+        match node {
+            BTreeNode::Leaf(leaf) => {
+                let keys = leaf.keys();
+
+                if keys.windows(2).any(|pair| pair[0] >= pair[1]) {
+                    return Err(BPlusTreeValidationError::UnsortedKeys);
+                }
+
+                leaf_order.push(page_id);
+                leaf_depths.push(depth);
+
+                Ok(keys.first().copied().zip(keys.last().copied()))
+            }
+
+            BTreeNode::Internal(internal) => {
+                let keys = internal.keys();
+                let children = internal.children();
+
+                // 4. Internal keys must be strictly increasing.
+                if keys.windows(2).any(|pair| pair[0] >= pair[1]) {
+                    return Err(BPlusTreeValidationError::UnsortedKeys);
+                }
+
+                // 5. An internal node needs keys.len() + 1 children.
+                if children.len() != keys.len() + 1 {
+                    return Err(BPlusTreeValidationError::InvalidChildCount);
+                }
+
+                let mut ranges = Vec::with_capacity(children.len());
+
+                for &child in children {
+                    let range =
+                        self.validate_subtree(child, visited, leaf_order, leaf_depths, depth + 1)?;
+                    ranges.push(range);
+                }
+
+                for (index, &key) in keys.iter().enumerate() {
+                    if let Some((_, left_max)) = ranges[index] {
+                        if left_max >= key {
+                            return Err(BPlusTreeValidationError::InvalidKeyRange);
+                        }
+                    }
+
+                    if let Some((right_min, _)) = ranges[index + 1] {
+                        if right_min < key {
+                            return Err(BPlusTreeValidationError::InvalidKeyRange);
+                        }
+                    }
+                }
+
+                let min = ranges.iter().find_map(|range| range.map(|r| r.0));
+
+                let max = ranges.iter().rev().find_map(|range| range.map(|r| r.1));
+
+                return Ok(min.zip(max));
             }
         }
     }
@@ -148,7 +287,7 @@ impl BPlusTree {
                     }
 
                     let mut right = leaf.split().map_err(NodeStorageError::LeafNodeError)?;
-                    let mut seperator = right.keys()[0];
+                    let seperator = right.keys()[0];
 
                     if key < seperator {
                         leaf.insert(key, record_id)
@@ -161,13 +300,13 @@ impl BPlusTree {
 
                     right.set_next_leaf(leaf.next_leaf());
 
-                    let mut right_page_id = self
+                    let right_page_id = self
                         .storage
                         .allocate_node(&BTreeNode::Leaf(right.clone()))?;
 
                     leaf.set_next_leaf(Some(right_page_id));
                     self.storage.write_node(page_id, &BTreeNode::Leaf(leaf))?;
-                    
+
                     self.insert_into_parent(ancestors, page_id, seperator, right_page_id)?;
 
                     return Ok(());

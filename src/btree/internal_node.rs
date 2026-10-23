@@ -85,7 +85,6 @@ impl InternalNode {
         self.keys.insert(index, seperator);
         self.children.insert(index + 1, right_child);
 
-
         self.node_header.set_num_keys(self.keys.len());
 
         Ok(())

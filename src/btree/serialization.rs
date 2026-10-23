@@ -59,8 +59,9 @@ pub fn serialize_leaf(node: &LeafNode) -> Result<[u8; PAGE_SIZE], SerializationE
 
     let mut offset = LEAF_METADATA_SIZE;
 
-    for (key, record_id) in node.keys.iter().zip(&node.record_ids) {
+    for (&key, record_id) in node.keys.iter().zip(&node.record_ids) {
         bytes[offset..offset + 8].copy_from_slice(&key.to_le_bytes());
+
         offset += 8;
 
         bytes[offset..offset + 8].copy_from_slice(&record_id.page_id().0.to_le_bytes());

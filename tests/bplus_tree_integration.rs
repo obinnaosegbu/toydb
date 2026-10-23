@@ -1,7 +1,13 @@
 use std::fs;
 
 use toydb::{
-    btree::{bplus_tree::BPlusTree, internal_node::InternalNode, node_storage::NodeStorage, record_id::RecordId}, buffer_pool::BufferPoolManager, disk_manager::DiskManager, page::PageId,
+    btree::{
+        bplus_tree::BPlusTree, internal_node::InternalNode, node_storage::NodeStorage,
+        record_id::RecordId,
+    },
+    buffer_pool::BufferPoolManager,
+    disk_manager::DiskManager,
+    page::PageId,
 };
 
 #[test]
@@ -152,53 +158,49 @@ fn non_root_leaf_split_updates_parent() {
 }
 
 #[test]
-    fn insert_separator_and_split_preserves_node_invariants() {
-        let mut node = InternalNode::new();
+fn insert_separator_and_split_preserves_node_invariants() {
+    let mut node = InternalNode::new();
 
-        // An internal node with 255 keys needs 256 children.
-        node.set_first_child(PageId(0)).unwrap();
+    // An internal node with 255 keys needs 256 children.
+    node.set_first_child(PageId(0)).unwrap();
 
-        for i in 0..255u64 {
-            node.insert_separator(i * 2, PageId(i + 1))
-                .unwrap();
-        }
-
-        assert_eq!(node.num_keys(), node.capacity());
-        assert_eq!(node.children().len(), node.keys().len() + 1);
-
-        // Insert an additional separator into the full node.
-        let separator = 255u64;
-        let right_child = PageId(999);
-
-        let (promoted, right) = node
-            .insert_separator_and_split(separator, right_child)
-            .unwrap();
-
-        // The promoted key must be the middle key of the
-        // combined, sorted key sequence.
-        assert_eq!(promoted, 255);
-
-        // Both resulting nodes must preserve the invariant.
-        assert_eq!(node.children().len(), node.keys().len() + 1);
-        assert_eq!(right.children().len(), right.keys().len() + 1);
-
-        assert!(node.num_keys() <= node.capacity());
-        assert!(right.num_keys() <= right.capacity());
-
-        // The left keys must all be smaller than the promoted key.
-        assert!(node.keys().iter().all(|&key| key < promoted));
-
-        // The right keys must all be greater than the promoted key.
-        assert!(right.keys().iter().all(|&key| key > promoted));
+    for i in 0..255u64 {
+        node.insert_separator(i * 2, PageId(i + 1)).unwrap();
     }
 
+    assert_eq!(node.num_keys(), node.capacity());
+    assert_eq!(node.children().len(), node.keys().len() + 1);
+
+    // Insert an additional separator into the full node.
+    let separator = 255u64;
+    let right_child = PageId(999);
+
+    let (promoted, right) = node
+        .insert_separator_and_split(separator, right_child)
+        .unwrap();
+
+    // The promoted key must be the middle key of the
+    // combined, sorted key sequence.
+    assert_eq!(promoted, 255);
+
+    // Both resulting nodes must preserve the invariant.
+    assert_eq!(node.children().len(), node.keys().len() + 1);
+    assert_eq!(right.children().len(), right.keys().len() + 1);
+
+    assert!(node.num_keys() <= node.capacity());
+    assert!(right.num_keys() <= right.capacity());
+
+    // The left keys must all be smaller than the promoted key.
+    assert!(node.keys().iter().all(|&key| key < promoted));
+
+    // The right keys must all be greater than the promoted key.
+    assert!(right.keys().iter().all(|&key| key > promoted));
+}
 
 #[test]
 fn recursive_internal_splits_preserve_search() {
-    let path = std::env::temp_dir().join(format!(
-        "toydb_recursive_split_{}.db",
-        std::process::id()
-    ));
+    let path =
+        std::env::temp_dir().join(format!("toydb_recursive_split_{}.db", std::process::id()));
 
     let _ = fs::remove_file(&path);
     let path_string = path.to_string_lossy().into_owned();
@@ -226,6 +228,29 @@ fn recursive_internal_splits_preserve_search() {
     }
 
     assert_eq!(tree.search(30_000).unwrap(), None);
+
+    drop(tree);
+    fs::remove_file(&path).unwrap();
+}
+
+#[test]
+fn valid_tree_passes_validation() {
+    let path = std::env::temp_dir().join(format!("toydb_validation_{}.db", std::process::id()));
+
+    let _ = fs::remove_file(&path);
+    let path_string = path.to_string_lossy().into_owned();
+
+    let disk_manager = DiskManager::open(&path_string).unwrap();
+    let buffer_pool = BufferPoolManager::new(disk_manager, 1);
+    let storage = NodeStorage::new(buffer_pool);
+    let mut tree = BPlusTree::new(storage).unwrap();
+
+    for key in 0..1_000_u64 {
+        let record_id = RecordId::new(PageId(100), key as u32);
+        tree.insert(key, record_id).unwrap();
+    }
+
+    assert!(tree.validate().is_ok());
 
     drop(tree);
     fs::remove_file(&path).unwrap();
