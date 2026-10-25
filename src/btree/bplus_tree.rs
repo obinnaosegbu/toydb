@@ -8,7 +8,7 @@ use crate::{
         node_storage::{NodeStorage, NodeStorageError},
         record_id::RecordId,
     },
-    page::{Page, PageId},
+    page::PageId,
 };
 
 pub struct BPlusTree {
@@ -26,6 +26,8 @@ pub enum BPlusTreeValidationError {
     UnequalLeafDepth,
     InvalidInternalNode,
     EmptyNonRootLeaf,
+    UnderfullLeaf,
+    UnderfullInternal,
 }
 
 impl BPlusTree {
@@ -320,6 +322,39 @@ impl BPlusTree {
                     self.insert_into_parent(ancestors, page_id, seperator, right_page_id)?;
 
                     return Ok(());
+                }
+            }
+        }
+    }
+
+    pub fn remove(&mut self, key: u64) -> Result<bool, NodeStorageError> {
+        let mut page_id = self.root_page_id;
+        let mut ancestors = Vec::new();
+
+        loop {
+            let node = self.storage.read_node(page_id)?;
+
+            match node {
+                BTreeNode::Internal(internal_node) => {
+                    ancestors.push(page_id);
+                    page_id = internal_node
+                        .child_for_key(key)
+                        .ok_or(NodeStorageError::MissingChildPointer)?;
+                }
+
+                BTreeNode::Leaf(mut leaf_node) => {
+                    let removed = leaf_node
+                        .remove(key)
+                        .map_err(NodeStorageError::LeafNodeError)?;
+
+                    if !removed {
+                        return Ok(false);
+                    }
+
+                    self.storage
+                        .write_node(page_id, &BTreeNode::Leaf(leaf_node))?;
+
+                    return Ok(true);
                 }
             }
         }

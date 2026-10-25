@@ -1,5 +1,8 @@
 use crate::{
-    btree::{node_header::NodeHeader, node_type::NodeType, record_id::RecordId},
+    btree::{
+        node_header::NodeHeader, node_storage::NodeStorageError, node_type::NodeType,
+        record_id::RecordId,
+    },
     page::{PAGE_SIZE, PageId},
 };
 
@@ -51,6 +54,10 @@ impl LeafNode {
 
     pub fn capacity(&self) -> usize {
         LEAF_CAPACITY
+    }
+
+    pub fn min_capacity(&self) -> usize {
+        LEAF_CAPACITY / 2
     }
 
     pub fn keys(&self) -> &[u64] {
@@ -110,16 +117,17 @@ impl LeafNode {
         Ok(right)
     }
 
-    pub fn remove(&mut self, key: u64) -> bool {
+    pub fn remove(&mut self, key: u64) -> Result<bool, LeafNodeError> {
         match self.find_key(key) {
             Some(pos) => {
                 self.keys.remove(pos);
                 self.record_ids.remove(pos);
                 self.node_header.set_num_keys(self.keys.len());
-                return true;
+
+                return Ok(true);
             }
 
-            None => return false,
+            None => Ok(false),
         }
     }
 }

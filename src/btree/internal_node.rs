@@ -50,6 +50,10 @@ impl InternalNode {
         (PAGE_SIZE - 16) / 16
     }
 
+    pub fn min_capacity(&self) -> usize {
+        self.capacity() / 2
+    }
+
     pub fn is_full(&self) -> bool {
         self.num_keys() >= self.capacity()
     }

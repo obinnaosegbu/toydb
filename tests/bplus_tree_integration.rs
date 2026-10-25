@@ -10,10 +10,9 @@ use toydb::{
     page::PageId,
 };
 
-#[test]
-fn insert_and_search_keys() {
-    let path =
-        std::env::temp_dir().join(format!("toydb_bplus_tree_test_{}.db", std::process::id()));
+fn create_test_tree() -> BPlusTree {
+    let path: std::path::PathBuf =
+        std::env::temp_dir().join(format!("toydb_{}.db", std::process::id()));
 
     let _ = fs::remove_file(&path);
     let path_string = path.to_string_lossy().into_owned();
@@ -21,8 +20,15 @@ fn insert_and_search_keys() {
     let disk_manager = DiskManager::open(&path_string).unwrap();
     let buffer_pool = BufferPoolManager::new(disk_manager, 1);
     let storage = NodeStorage::new(buffer_pool);
+    let tree = BPlusTree::new(storage).unwrap();
 
-    let mut tree = BPlusTree::new(storage).unwrap();
+    tree
+}
+
+
+#[test]
+fn insert_and_search_keys() {
+    let mut tree = create_test_tree();
 
     let records = [
         (10, RecordId::new(PageId(100), 0)),
@@ -40,22 +46,11 @@ fn insert_and_search_keys() {
     }
 
     assert_eq!(tree.search(99).unwrap(), None);
-
-    drop(tree);
-    fs::remove_file(&path).unwrap();
 }
 
 #[test]
 fn root_leaf_splits_and_search_still_works() {
-    let path = std::env::temp_dir().join("toydb_root_split_test.db");
-    let _ = std::fs::remove_file(&path);
-
-    let path_string = path.to_string_lossy().into_owned();
-
-    let disk_manager = DiskManager::open(&path_string).unwrap();
-    let buffer_pool = BufferPoolManager::new(disk_manager, 1);
-    let storage = NodeStorage::new(buffer_pool);
-    let mut tree = BPlusTree::new(storage).unwrap();
+    let mut tree = create_test_tree();
 
     // Fill the original leaf to its capacity of 203 keys.
     for key in 0..203u64 {
@@ -75,21 +70,11 @@ fn root_leaf_splits_and_search_still_works() {
 
     // Verify a missing key is still reported correctly.
     assert_eq!(tree.search(999).unwrap(), None);
-
-    let _ = std::fs::remove_file(&path);
 }
 
 #[test]
 fn reverse_insertion_split_and_duplicate_handling() {
-    let path = std::env::temp_dir().join("toydb_reverse_split_test.db");
-    let _ = std::fs::remove_file(&path);
-
-    let path_string = path.to_string_lossy().into_owned();
-
-    let disk_manager = DiskManager::open(&path_string).unwrap();
-    let buffer_pool = BufferPoolManager::new(disk_manager, 1);
-    let storage = NodeStorage::new(buffer_pool);
-    let mut tree = BPlusTree::new(storage).unwrap();
+    let mut tree = create_test_tree();
 
     // Insert 203 keys in reverse order.
     for key in (1..=203u64).rev() {
@@ -117,20 +102,11 @@ fn reverse_insertion_split_and_duplicate_handling() {
         tree.search(100).unwrap(),
         Some(RecordId::new(PageId(100), 100))
     );
-
-    let _ = std::fs::remove_file(&path);
 }
 
 #[test]
 fn non_root_leaf_split_updates_parent() {
-    let path = std::env::temp_dir().join("toydb_non_root_split_test.db");
-    let _ = std::fs::remove_file(&path);
-
-    let path_string = path.to_string_lossy().into_owned();
-    let disk_manager = DiskManager::open(&path_string).unwrap();
-    let buffer_pool = BufferPoolManager::new(disk_manager, 1);
-    let storage = NodeStorage::new(buffer_pool);
-    let mut tree = BPlusTree::new(storage).unwrap();
+    let mut tree = create_test_tree();
 
     // Trigger the first root split.
     for key in 0..=203u64 {
@@ -153,8 +129,6 @@ fn non_root_leaf_split_updates_parent() {
             "Failed to find key {key}"
         );
     }
-
-    let _ = std::fs::remove_file(&path);
 }
 
 #[test]
@@ -199,16 +173,7 @@ fn insert_separator_and_split_preserves_node_invariants() {
 
 #[test]
 fn recursive_internal_splits_preserve_search() {
-    let path =
-        std::env::temp_dir().join(format!("toydb_recursive_split_{}.db", std::process::id()));
-
-    let _ = fs::remove_file(&path);
-    let path_string = path.to_string_lossy().into_owned();
-
-    let disk_manager = DiskManager::open(&path_string).unwrap();
-    let buffer_pool = BufferPoolManager::new(disk_manager, 1);
-    let storage = NodeStorage::new(buffer_pool);
-    let mut tree = BPlusTree::new(storage).unwrap();
+    let mut tree = create_test_tree();
 
     // Insert enough ascending keys to force internal-node overflow.
     for key in 0..30_000u64 {
@@ -228,22 +193,11 @@ fn recursive_internal_splits_preserve_search() {
     }
 
     assert_eq!(tree.search(30_000).unwrap(), None);
-
-    drop(tree);
-    fs::remove_file(&path).unwrap();
 }
 
 #[test]
 fn valid_tree_passes_validation() {
-    let path = std::env::temp_dir().join(format!("toydb_validation_{}.db", std::process::id()));
-
-    let _ = fs::remove_file(&path);
-    let path_string = path.to_string_lossy().into_owned();
-
-    let disk_manager = DiskManager::open(&path_string).unwrap();
-    let buffer_pool = BufferPoolManager::new(disk_manager, 1);
-    let storage = NodeStorage::new(buffer_pool);
-    let mut tree = BPlusTree::new(storage).unwrap();
+    let mut tree = create_test_tree();
 
     for key in 0..1_000_u64 {
         let record_id = RecordId::new(PageId(100), key as u32);
@@ -251,7 +205,69 @@ fn valid_tree_passes_validation() {
     }
 
     assert!(tree.validate().is_ok());
+}
 
-    drop(tree);
-    fs::remove_file(&path).unwrap();
+
+#[test]
+fn test_remove_existing_key() {
+    let mut tree = create_test_tree();
+
+    tree.insert(10, RecordId::new(PageId(1), 0)).unwrap();
+    tree.insert(20, RecordId::new(PageId(2), 0)).unwrap();
+    tree.insert(30, RecordId::new(PageId(3), 0)).unwrap();
+
+    assert!(tree.remove(20).unwrap());
+    assert_eq!(tree.search(20).unwrap(), None);
+
+    assert!(tree.search(10).unwrap().is_some());
+    assert!(tree.search(30).unwrap().is_some());
+}
+
+#[test]
+fn test_remove_missing_key() {
+    let mut tree = create_test_tree();
+
+    tree.insert(10, RecordId::new(PageId(1), 0)).unwrap();
+
+    assert!(!tree.remove(99).unwrap());
+    assert!(tree.search(10).unwrap().is_some());
+}
+
+#[test]
+fn test_remove_preserves_other_records() {
+    let mut tree = create_test_tree();
+
+    for key in 1..=20 {
+        tree.insert(key, RecordId::new(PageId(key), 0)).unwrap();
+    }
+
+    assert!(tree.remove(10).unwrap());
+
+    for key in 1..=20 {
+        if key == 10 {
+            assert_eq!(tree.search(key).unwrap(), None);
+        } else {
+            assert!(tree.search(key).unwrap().is_some());
+        }
+    }
+}
+
+#[test]
+fn test_remove_from_multi_level_tree() {
+    let mut tree = create_test_tree();
+
+    for key in 1..=1000 {
+        tree.insert(key, RecordId::new(PageId(key), 0)).unwrap();
+    }
+
+    for key in [1, 250, 500, 750, 1000] {
+        assert!(tree.remove(key).unwrap());
+        assert_eq!(tree.search(key).unwrap(), None);
+    }
+
+    for key in 1..=1000 {
+        if ![1, 250, 500, 750, 1000].contains(&key) {
+            assert!(tree.search(key).unwrap().is_some());
+        }
+    }
 }
